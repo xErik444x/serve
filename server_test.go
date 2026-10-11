@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -288,7 +289,9 @@ func request(t *testing.T, url string) (*http.Response, string) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	buf := make([]byte, 1<<16)
-	n, _ := resp.Body.Read(buf)
-	return resp, strings.TrimSuffix(string(buf[:n]), "\x00")
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp, string(body)
 }
