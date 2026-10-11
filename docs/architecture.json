@@ -1,0 +1,244 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "serve-go \u2014 servidor est\u00e1tico r\u00e1pido con CLI interactivo",
+  "quality_profile": "showcase",
+  "views": [
+   {
+    "id": "cli-flow",
+    "label": "Flujo CLI",
+    "focus": [
+     "user",
+     "cli",
+     "kernel",
+     "server"
+    ],
+    "note": "El CLI parsea flags o abre el men\u00fa interactivo, lanza el server y abre el navegador."
+   },
+   {
+    "id": "request-path",
+    "label": "Path de request",
+    "focus": [
+     "server",
+     "kernel",
+     "cache",
+     "fs"
+    ],
+    "note": "Cada request entra por el browser (server) y pasa por el kernel Mux: cache LRU o disco."
+   },
+   {
+    "id": "build-cross",
+    "label": "Cross-compile",
+    "focus": [
+     "src",
+     "gox",
+     "win",
+     "linux"
+    ],
+    "note": "gox genera los binarios: serve.exe (Windows), serve (Linux/macOS)."
+   }
+  ]
+ },
+ "components": [
+  {
+   "id": "user",
+   "type": "external",
+   "label": "Erik",
+   "sublabel": "terminal",
+   "pos": [
+    40,
+    120
+   ],
+   "size": [
+    110,
+    56
+   ]
+  },
+  {
+   "id": "cli",
+   "type": "backend",
+   "label": "serve CLI",
+   "sublabel": "flags + men\u00fa TUI",
+   "pos": [
+    220,
+    120
+   ],
+   "size": [
+    130,
+    62
+   ]
+  },
+  {
+   "id": "server",
+   "type": "frontend",
+   "label": "Browser",
+   "sublabel": "http://localhost:PORT",
+   "pos": [
+    220,
+    30
+   ],
+   "size": [
+    130,
+    56
+   ]
+  },
+  {
+   "id": "kernel",
+   "type": "backend",
+   "label": "HTTP kernel",
+   "sublabel": "ServeMux + gzip",
+   "pos": [
+    430,
+    120
+   ],
+   "size": [
+    140,
+    62
+   ]
+  },
+  {
+   "id": "cache",
+   "type": "database",
+   "label": "Cache LRU",
+   "sublabel": "ETag + in-memory",
+   "pos": [
+    650,
+    50
+   ],
+   "size": [
+    130,
+    60
+   ],
+   "tag": "hot path"
+  },
+  {
+   "id": "fs",
+   "type": "database",
+   "label": "Disco",
+   "sublabel": "http.ServeFile",
+   "pos": [
+    630,
+    200
+   ],
+   "size": [
+    130,
+    56
+   ],
+   "tag": "cold path"
+  },
+  {
+   "id": "src",
+   "type": "backend",
+   "label": "Fuente Go",
+   "sublabel": "single binary",
+   "pos": [
+    40,
+    330
+   ],
+   "size": [
+    130,
+    56
+   ]
+  },
+  {
+   "id": "gox",
+   "type": "backend",
+   "label": "Makefile",
+   "sublabel": "go build GOOS=...",
+   "pos": [
+    220,
+    330
+   ],
+   "size": [
+    130,
+    56
+   ]
+  },
+  {
+   "id": "win",
+   "type": "cloud",
+   "label": "serve.exe",
+   "sublabel": "Windows amd64",
+   "pos": [
+    400,
+    330
+   ],
+   "size": [
+    120,
+    56
+   ]
+  },
+  {
+   "id": "linux",
+   "type": "cloud",
+   "label": "serve",
+   "sublabel": "Linux arm64/amd64",
+   "pos": [
+    580,
+    330
+   ],
+   "size": [
+    130,
+    56
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "from": "user",
+   "to": "cli",
+   "label": "flags"
+  },
+  {
+   "from": "cli",
+   "to": "server",
+   "label": "abre URL"
+  },
+  {
+   "from": "cli",
+   "to": "kernel",
+   "label": ":PORT",
+   "labelAt": [
+    360,
+    110
+   ]
+  },
+  {
+   "from": "server",
+   "to": "kernel",
+   "label": "GET file"
+  },
+  {
+   "from": "kernel",
+   "to": "cache",
+   "label": "hit",
+   "labelDx": 12
+  },
+  {
+   "from": "kernel",
+   "to": "fs",
+   "label": "miss",
+   "labelDx": 12
+  },
+  {
+   "from": "src",
+   "to": "gox",
+   "label": "build"
+  },
+  {
+   "from": "gox",
+   "to": "win",
+   "label": "windows"
+  },
+  {
+   "from": "win",
+   "to": "linux",
+   "label": "+ linux/darwin",
+   "labelAt": [
+    550,
+    402
+   ]
+  }
+ ]
+}
