@@ -49,7 +49,7 @@ serve -L           # accesible desde la LAN
 Requisitos: [Go 1.22+](https://go.dev/dl/).
 
 ```powershell
-git clone https://github.com/xErik444x/serve-go.git
+git clone https://github.com/xErik444x/serve.git
 cd serve-go
 go build -o serve.exe .
 # opcional: copiarlo al PATH
@@ -59,7 +59,7 @@ copy serve.exe $HOME\bin\
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/xErik444x/serve-go.git && cd serve-go
+git clone https://github.com/xErik444x/serve.git && cd serve-go
 make build            # o: go build -o serve .
 sudo cp serve /usr/local/bin/
 ```

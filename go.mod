@@ -1,3 +1,3 @@
-module github.com/xErik444x/serve-go
+module github.com/xErik444x/serve
 
 go 1.22

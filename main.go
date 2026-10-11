@@ -129,11 +129,11 @@ func main() {
 		}},
 	}
 	for {
-		if err := Menu("opciones:", items); err != nil {
-			break
-		}
 		if err := nonBlockingCheck(errCh); err != nil {
 			fatal("server: %v", err)
+		}
+		if err := Menu("opciones:", items); err != nil {
+			break
 		}
 	}
 }
