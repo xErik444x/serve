@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"io/fs"
-	"html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,14 +16,15 @@ import (
 
 // Config del server.
 type Config struct {
-	Root       string // directorio a servir
-	Port       int    // puerto (0 = auto)
-	CacheBytes int64  // tope de la cache LRU
-	CORS       bool   // habilitar CORS *
-	Open       bool   // 0.0.0.0 en vez de localhost
-	Quiet      bool   // sin logs por request
-	NoCache    bool   // deshabilitar cache (dev)
-	NoBrowse   bool   // DESHABILITAR listing de dirs (default: listar como npx serve)
+	Root       string        // directorio a servir
+	Port       int           // puerto (0 = auto)
+	CacheBytes int64         // tope de la cache LRU
+	CORS       bool          // habilitar CORS *
+	Open       bool          // 0.0.0.0 en vez de localhost
+	Quiet      bool          // sin logs por request
+	NoCache    bool          // deshabilitar cache (dev)
+	NoBrowse   bool          // DESHABILITAR listing de dirs (default: listar como npx serve)
+	LogCh      chan<- string // si no es nil, los logs de request van acá (TUI); si nil, a stdout
 }
 
 // Server es el server estático.
@@ -43,6 +44,20 @@ func New(cfg Config) *Server {
 
 // Stats devuelve el contador compartido (para el /__serve/stats).
 func (s *Server) Stats() *Stats { return &s.stats }
+
+// logRequest emite una línea de log. Con TUI activa (LogCh no nil) la manda
+// por el canal para que Bubble Tea la renderice; si no, escribe a stdout.
+// Nunca escribe directo a stdout cuando la TUI es dueña de la pantalla.
+func (s *Server) logRequest(line string) {
+	if s.cfg.LogCh != nil {
+		select {
+		case s.cfg.LogCh <- line:
+		default: // TUI lenta: descartamos para no bloquear el handler
+		}
+		return
+	}
+	fmt.Printf("%s (srv)\n", line)
+}
 
 // Handler arma el http.Handler completo (público para tests).
 func (s *Server) Handler() http.Handler {
@@ -136,7 +151,7 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.cfg.Quiet {
-		fmt.Printf("%s %s %d %s (%s)\n", r.Method, urlPath, 200, time.Since(start).Round(time.Microsecond), "srv")
+		s.logRequest(fmt.Sprintf("%s %s %d %s", r.Method, urlPath, 200, time.Since(start).Round(time.Microsecond)))
 	}
 	w.Header().Set("Content-Type", DetectContentType(e.path))
 	if r.Method == http.MethodHead {
@@ -231,13 +246,13 @@ func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
 	hits, misses, bytes, total := s.stats.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"hits":      hits,
-		"misses":    misses,
-		"bytesSent": bytes,
-		"requests":  total,
-		"cacheLen":  s.cache.Len(),
+		"hits":       hits,
+		"misses":     misses,
+		"bytesSent":  bytes,
+		"requests":   total,
+		"cacheLen":   s.cache.Len(),
 		"cacheBytes": s.cache.Bytes(),
-		"root":      s.cfg.Root,
+		"root":       s.cfg.Root,
 	})
 }
 

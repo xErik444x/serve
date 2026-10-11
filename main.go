@@ -7,10 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 )
 
-const version = "1.3.0"
+const version = "1.4.0"
 
 func main() {
 	var (
@@ -51,6 +50,12 @@ func main() {
 		p = FreePort(3000) // 3000, o el siguiente libre
 	}
 
+	// Con TUI activa el server manda sus logs por canal (nunca a stdout).
+	var logCh chan string
+	if !*noMenu {
+		logCh = make(chan string, 256)
+	}
+
 	cfg := Config{
 		Root:       dir,
 		Port:       p,
@@ -60,34 +65,13 @@ func main() {
 		Quiet:      *quiet,
 		NoCache:    *nocache,
 		NoBrowse:   *noBrws,
+		LogCh:      logCh,
 	}
 	srv := New(cfg)
 
-	files, bytes := walkRoot(dir)
 	url := fmt.Sprintf("http://localhost:%d", p)
-	fmt.Println()
-	fmt.Printf("  serve-go %s\n", version)
-	fmt.Printf("  ────────────────────────────────────\n")
-	fmt.Printf("  sirviendo   %s\n", dir)
-	fmt.Printf("  archivos    %d (%s)\n", files, humanBytes(bytes))
-	fmt.Printf("  url         %s\n", url)
-	if cfg.Open {
-		fmt.Printf("  lan         http://%s:%d\n", lanIP(), p)
-	}
-	fmt.Printf("  cache       %d MB (LRU) | stats: %s/__serve/stats\n", *cacheMB, url)
-	fmt.Printf("  ────────────────────────────────────\n")
-	fmt.Printf("  CTRL+C para parar\n")
-	fmt.Println()
 
-	if *openFl {
-		go func() {
-			if WaitForUp(p) {
-				_ = OpenBrowser(url)
-			}
-		}()
-	}
-
-	// server en goroutine + menú interactivo en primer plano
+	// arranque del server en goroutine
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Run() }()
 
@@ -97,23 +81,20 @@ func main() {
 		}
 	}
 
+	if *openFl {
+		go func() { _ = OpenBrowser(url) }()
+	}
+
+	files, bytes := walkRoot(dir)
+
 	if *noMenu {
+		// Modo CI/script: cabecera plana y a esperar.
+		fmt.Printf("serve-go %s  ·  %s  ·  %d archivos (%s)  ·  %s\n",
+			version, dir, files, humanBytes(bytes), url)
 		<-errCh
 		return
 	}
 
-	// menú interactivo (bloquea stdin hasta q)
-	startTime := time.Now()
-	statsView := func() StatsView {
-		h, m, b, t := srv.Stats().Snapshot()
-		return StatsView{
-			Hits: h, Misses: m, Bytes: b, Total: t,
-			CacheLen:   srv.cache.Len(),
-			CacheBytes: srv.cache.Bytes(),
-			Root:       dir,
-			Uptime:     time.Since(startTime),
-		}
-	}
 	items := []MenuItem{
 		{"o", "abrir en el navegador", func() error { return OpenBrowser(url) }},
 		{"l", "listar archivos servidos", func() error {
@@ -126,38 +107,11 @@ func main() {
 			})
 			return nil
 		}},
+		{"c", "limpiar la cache", func() error { srv.cache.Clear(); return nil }},
 	}
 
-	// Dashboard de stats en vivo desde el arranque; el menú es opcional
-	// (Enter lo abre) y Enter en el menú vuelve al dashboard.
-	pump := newPump(os.Stdin)
-	for {
-		if err := nonBlockingCheck(errCh); err != nil {
-			fatal("server: %v", err)
-		}
-		action := LiveDashboard(pump, func() string {
-			return RenderStats(statsView())
-		}, time.Second)
-		switch action {
-		case "quit", "eof":
-			fmt.Println("\nserve-go: chau 👋")
-			return
-		case "menu":
-			if MenuLoop(pump, "opciones:", items) {
-				fmt.Println("\nserve-go: chau 👋")
-				return
-			}
-		}
-	}
-}
-
-// nonBlockingCheck chequea si el server murió sin bloquear.
-func nonBlockingCheck(errCh <-chan error) error {
-	select {
-	case err := <-errCh:
-		return err
-	default:
-		return nil
+	if err := runTUI(newTUIModel(srv, dir, url, items, logCh), errCh); err != nil {
+		fatal("tui: %v", err)
 	}
 }
 
@@ -181,7 +135,7 @@ func fatal(f string, args ...interface{}) {
 }
 
 func humanBytes(n int64) string {
-	const kb, mb, gb = 1<<10, 1<<20, 1<<30
+	const kb, mb, gb = 1 << 10, 1 << 20, 1 << 30
 	switch {
 	case n >= gb:
 		return fmt.Sprintf("%.1f GB", float64(n)/gb)

@@ -93,8 +93,8 @@ func TestServe_TamanoGrande_Stream(t *testing.T) {
 // TestServe_404NoCachea: el 404 no crea entradas en cache.
 func TestServe_404NoCachea(t *testing.T) {
 	ts, s := newTestServer(t, nil)
-	request(t, ts.URL + "/inexistente.txt")
-	request(t, ts.URL + "/index.html")
+	request(t, ts.URL+"/inexistente.txt")
+	request(t, ts.URL+"/index.html")
 	if s.cache.Len() != 1 {
 		t.Errorf("cache debería tener 1 entrada, hay %d", s.cache.Len())
 	}

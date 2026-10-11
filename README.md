@@ -99,35 +99,47 @@ serve [flags]
 | `-no-menu` | off | arranca sin el menú interactivo (CI / scripts / background) |
 | `-v` | — | versión |
 
-### Menú interactivo
+### Dashboard y menú (TUI)
 
-Al arrancar, el CLI muestra el **panel de stats en vivo** (se refresca solo, sin
-que tengas que apretar nada). El menú es **opcional**:
+Al arrancar, el CLI levanta una **TUI a pantalla completa** (Bubble Tea + Lipgloss,
+alt-screen) con el dashboard en vivo: hit rate con barra, contadores, uptime y las
+últimas requests en tiempo real. Se refresca solo cada segundo, sin flicker.
 
 ```
-  serve-go 1.3.0
-  ────────────────────────────────────
-  sirviendo   /home/erik/misitio
-  archivos    60 (880.0 KB)
-  url         http://localhost:3000
-  cache       64 MB (LRU) | stats: http://localhost:3000/__serve/stats
-  ────────────────────────────────────
-  CTRL+C para parar
-
-  ╭──────────────────────────────╮
-  │   ⚡ serve-go — stats         │
-  ╰──────────────────────────────╯
-
-  cache hit rate  [██████████████░░░░░░░░░░] 62.5%
-
-  requests        14000
-  ...
-  [Enter] menú · [q] salir
+╭─────────────────────────────────────────────────────────╮
+│   ⚡ serve-go — dashboard                                │
+│                                                         │
+│  cache hit rate   [██████████████████░░░░░░] 62.5%      │
+│                                                         │
+│  requests         14000                                  │
+│  hits             8750                                   │
+│  misses           5250                                   │
+│  bytes enviados   12.4 MB                                │
+│  cache (len)      38 files                               │
+│  cache (mem)      9.2 MB                                 │
+│  root             /home/erik/misitio                     │
+│  uptime           3m20s                                  │
+│                                                         │
+│  logs recientes                                          │
+│  › GET /index.html 200 42µs                              │
+│  › GET /app.css 200 18µs                                 │
+│                                                         │
+│  ⣾ sirviendo · [Enter] menú · [q] salir                  │
+╰─────────────────────────────────────────────────────────╯
 ```
 
-- **[Enter]** abre el menú de acciones: `[o]` abrir navegador, `[l]` listar archivos.
-- **Enter** de nuevo vuelve al panel en vivo; **q** sale del programa (cierra el server).
-- Ponelo en background/CI con `-no-menu`.
+- **[Enter]** abre el menú de acciones: `[o]` abrir navegador, `[l]` listar archivos, `[c]` limpiar cache.
+- **↑/↓** mueven el cursor, **Enter** ejecuta, **Esc** vuelve al dashboard.
+- Los atajos (`o`, `l`, `c`) también funcionan directo desde el dashboard.
+- **q** (o **Ctrl+C**) sale y cierra el server. **`-no-menu`** corre sin TUI (CI / scripts).
+
+### Por qué Bubble Tea
+
+Los logs de request del server salen por un **canal** y los renderiza la TUI, en vez
+de escribir a stdout desde las goroutines del server. Así no hay dos escritores
+compitiendo por la pantalla (que en la versión anterior desincronizaba el panel al
+abrir una imagen / cachear un archivo). El alt-screen de Bubble Tea además elimina el
+flicker del redibujo por cursor relativo.
 
 ### Panel de stats
 
@@ -190,7 +202,7 @@ go test ./...        # 29 tests
 go vet ./...
 ```
 
-Cubren: serving + MIME types (+ mayúsculas), ETag/304, LRU evict y orden, path traversal, CORS, HEAD, 404/405, health/stats, listing de dirs (default y `-no-browse`), stream de archivos mayores a la cache, concurrencia (200 requests paralelos + stats sin pérdidas), panel de stats (formato, colores por hit rate, `-no-color`), dashboard en vivo (arranca solo, refresca, `q` sale) y menú opcional (Enter vuelve al dashboard).
+Cubren: serving + MIME types (+ mayúsculas), ETag/304, LRU evict y orden, path traversal, CORS, HEAD, 404/405, health/stats, listing de dirs (default y `-no-browse`), stream de archivos mayores a la cache, concurrencia (200 requests paralelos + stats sin pérdidas), panel de stats (formato, colores por hit rate, `-no-color`) y TUI Bubble Tea (render del dashboard, `q`/Ctrl+C salen, Enter abre menú, Esc vuelve, navegación ↑/↓, ejecución por atajo, acumulado+recorte de logs, error del server).
 
 ## Licencia
 

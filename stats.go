@@ -61,7 +61,7 @@ func RenderStats(v StatsView) string {
 	} else if hitRate < 80 {
 		color = cYellow
 	}
-	b.WriteString(paint(cBold, "  cache hit rate")+"  "+paint(color, bar+fmt.Sprintf(" %.1f%%", hitRate))+"\n")
+	b.WriteString(paint(cBold, "  cache hit rate") + "  " + paint(color, bar+fmt.Sprintf(" %.1f%%", hitRate)) + "\n")
 	b.WriteString("\n")
 
 	// contadores

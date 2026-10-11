@@ -7,17 +7,17 @@ import (
 
 func TestDetectContentType(t *testing.T) {
 	casos := map[string]string{
-		"index.html":  "text/html",
-		"app.js":      "text/javascript",
-		"style.css":   "text/css",
-		"data.json":   "application/json",
-		"foto.PNG":    "image/png",         // mayúsculas
-		"video.MP4":   "video/mp4",         // mayúsculas
+		"index.html":   "text/html",
+		"app.js":       "text/javascript",
+		"style.css":    "text/css",
+		"data.json":    "application/json",
+		"foto.PNG":     "image/png", // mayúsculas
+		"video.MP4":    "video/mp4", // mayúsculas
 		"fuente.woff2": "font/woff2",
-		"doc.pdf":     "application/pdf",
-		"nota.md":     "text/plain",
-		"raro.xyz":    "application/octet-stream",
-		"sinext":      "application/octet-stream",
+		"doc.pdf":      "application/pdf",
+		"nota.md":      "text/plain",
+		"raro.xyz":     "application/octet-stream",
+		"sinext":       "application/octet-stream",
 	}
 	for name, want := range casos {
 		if got := DetectContentType(name); !strings.Contains(got, want) {
@@ -28,9 +28,9 @@ func TestDetectContentType(t *testing.T) {
 
 func TestResolvePath_Traversal(t *testing.T) {
 	casosBuenos := map[string]string{
-		"/":              "/root/site",        // el root mismo
-		"/index.html":    "/root/site/index.html",
-		"/sub/a.txt":     "/root/site/sub/a.txt",
+		"/":           "/root/site", // el root mismo
+		"/index.html": "/root/site/index.html",
+		"/sub/a.txt":  "/root/site/sub/a.txt",
 	}
 	for url, want := range casosBuenos {
 		got, ok := ResolvePath("/root/site", url)
@@ -100,7 +100,7 @@ func TestCache_EvictLRUOrden(t *testing.T) {
 	c := NewCache(10)
 	c.Put("/a", []byte("12345"), false) // 5
 	c.Put("/b", []byte("12345"), false) // 5+5=10
-	c.Get("/a")                          // a es más reciente
+	c.Get("/a")                         // a es más reciente
 	c.Put("/c", []byte("12345"), false) // evict de b (la más vieja)
 	if c.Get("/b") != nil {
 		t.Error("b debería haber sido evictada (LRU)")
@@ -113,7 +113,7 @@ func TestCache_EvictLRUOrden(t *testing.T) {
 func TestEtagMatch(t *testing.T) {
 	casos := []struct {
 		header, etag string
-		want bool
+		want         bool
 	}{
 		{`W/"abc"`, `W/"abc"`, true},
 		{`W/"x", W/"abc"`, `W/"abc"`, true},

@@ -103,6 +103,15 @@ func (c *Cache) Bytes() int64 {
 	return c.curBytes
 }
 
+// Clear vacía la cache por completo (menú interactivo / -no-cache).
+func (c *Cache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make(map[string]*list.Element)
+	c.order = list.New()
+	c.curBytes = 0
+}
+
 // Stats son las métricas del server (acumula hits/misses/bytes).
 type Stats struct {
 	mu        sync.Mutex
