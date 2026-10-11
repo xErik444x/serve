@@ -20,7 +20,21 @@ serve-go:   10.000 req, 100 conc. →    458 ms  | 21.833 rps |  0 errores
 
 ## Instalación
 
-### Windows (recomendado: release precompilado)
+### go install (Linux / macOS / Windows, si tenés Go)
+
+Con Go 1.22+ en el PATH, un solo comando instala el binario en `$GOPATH/bin` (normalmente `~/go/bin` — asegurate de que esté en tu `PATH`):
+
+```bash
+go install github.com/xErik444x/serve@latest
+```
+
+```powershell
+go install github.com/xErik444x/serve@latest   # genera serve.exe en %USERPROFILE%\go\bin
+```
+
+> Requiere una release taggeada (`v1.2.0` o posterior) — `@latest` resuelve la última tag `vX.Y.Z` publicada en [Releases](../../releases).
+
+### Windows (recomendado sin Go: release precompilado)
 
 1. Bajá `serve-windows-amd64.exe` de la última [release](../../releases).
 2. Renombralo a `serve.exe` y ponelo en una carpeta del `PATH`:
