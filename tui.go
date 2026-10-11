@@ -38,6 +38,21 @@ var (
 	stySel    = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
 )
 
+// hyperlink envuelve text en una secuencia OSC 8 para que el terminal lo haga
+// clickeable (Windows Terminal, iTerm2, VS Code, kitty...). Los terminales sin
+// soporte ignoran los escapes y muestran sólo el texto.
+func hyperlink(url, text string) string {
+	if url == "" {
+		return text
+	}
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// urlClickable renderiza el URL subrayado + hyperlink OSC 8.
+func urlClickable(url string) string {
+	return hyperlink(url, styCyan.Underline(true).Render(url))
+}
+
 // ---- modelo ----
 
 // tuiModel es el estado completo de la TUI. Separar el estado de la vista
@@ -226,6 +241,7 @@ func (m tuiModel) viewDashboard() string {
 
 	// contadores
 	rows := [][2]string{
+		{"url", ""}, // placeholder: el URL se renderiza aparte (hyperlink clickeable)
 		{"requests", fmt.Sprint(total)},
 		{"hits", fmt.Sprint(h)},
 		{"misses", fmt.Sprint(mi)},
@@ -236,6 +252,10 @@ func (m tuiModel) viewDashboard() string {
 		{"uptime", time.Since(m.start).Round(time.Second).String()},
 	}
 	for _, r := range rows {
+		if r[0] == "url" {
+			sb.WriteString("  " + styLabel.Render(pad("url", 16)) + urlClickable(m.url) + "\n")
+			continue
+		}
 		sb.WriteString("  " + styLabel.Render(pad(r[0], 16)) + styValue.Render(r[1]) + "\n")
 	}
 

@@ -30,6 +30,20 @@ func TestTUI_DashboardRender(t *testing.T) {
 	}
 }
 
+// El dashboard muestra el URL como hyperlink OSC 8 clickeable.
+func TestTUI_UrlClickeable(t *testing.T) {
+	m := newTestModel(t)
+	m.url = "http://localhost:3000"
+	out := m.View()
+	if !strings.Contains(out, "url") || !strings.Contains(out, "http://localhost:3000") {
+		t.Fatalf("el dashboard debería mostrar el url:\n%s", out)
+	}
+	// debe envolverlo con OSC 8 (]8;;URL) para que sea clickeable
+	if !strings.Contains(out, "\x1b]8;;http://localhost:3000") {
+		t.Errorf("el url no tiene el hyperlink OSC 8:\n%q", out)
+	}
+}
+
 // q sale del programa.
 func TestTUI_QSale(t *testing.T) {
 	m := newTestModel(t)
