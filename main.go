@@ -7,9 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 func main() {
 	var (
@@ -20,13 +21,16 @@ func main() {
 		open    = flag.Bool("L", false, "escuchar en 0.0.0.0 (accesible desde la LAN)")
 		quiet   = flag.Bool("q", false, "sin logs por request")
 		nocache = flag.Bool("no-cache", false, "deshabilitar la cache (dev)")
-		browse  = flag.Bool("b", false, "listing de directorios sin index.html")
+		noBrws  = flag.Bool("no-browse", false, "DESHABILITAR listing de dirs (default: listar como npx serve)")
+		noColor = flag.Bool("no-color", false, "sin colores ANSI (scripts / logs)")
 		cacheMB = flag.Int64("cache", 64, "tope de la cache en MB")
 		noMenu  = flag.Bool("no-menu", false, "no abrir el menú interactivo (CI / scripts)")
 		ver     = flag.Bool("v", false, "versión")
 	)
 	flag.Usage = usage
 	flag.Parse()
+
+	colorsOn = !*noColor
 
 	if *ver {
 		fmt.Printf("serve-go %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
@@ -55,7 +59,7 @@ func main() {
 		Open:       *open,
 		Quiet:      *quiet,
 		NoCache:    *nocache,
-		Browse:     *browse,
+		NoBrowse:   *noBrws,
 	}
 	srv := New(cfg)
 
@@ -99,11 +103,18 @@ func main() {
 	}
 
 	// menú interactivo (bloquea stdin hasta q)
+	startTime := time.Now()
 	items := []MenuItem{
 		{"o", "abrir en el navegador", func() error { return OpenBrowser(url) }},
-		{"s", "ver stats (hit rate de la cache)", func() error {
+		{"s", "ver stats (panel con hit rate)", func() error {
 			h, m, b, t := srv.Stats().Snapshot()
-			fmt.Printf("  requests: %d | cache hits: %d | misses: %d | enviados: %s\n", t, h, m, humanBytes(int64(b)))
+			fmt.Print(RenderStats(StatsView{
+				Hits: h, Misses: m, Bytes: b, Total: t,
+				CacheLen:   srv.cache.Len(),
+				CacheBytes: srv.cache.Bytes(),
+				Root:       dir,
+				Uptime:     time.Since(startTime),
+			}))
 			return nil
 		}},
 		{"l", "listar archivos servidos", func() error {

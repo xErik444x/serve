@@ -23,7 +23,7 @@ type Config struct {
 	Open       bool   // 0.0.0.0 en vez de localhost
 	Quiet      bool   // sin logs por request
 	NoCache    bool   // deshabilitar cache (dev)
-	Browse     bool   // listing de directorios
+	NoBrowse   bool   // DESHABILITAR listing de dirs (default: listar como npx serve)
 }
 
 // Server es el server estático.
@@ -169,12 +169,12 @@ func (s *Server) load(full, urlPath string, w http.ResponseWriter, r *http.Reque
 				return s.cache.Put(index, body, false), nil
 			}
 		}
-		if !s.cfg.Browse {
-			http.Error(w, "directorio sin index.html (usá --browse)", http.StatusNotFound)
-			return nil, err
+		if !s.cfg.NoBrowse {
+			s.dirListing(w, full, urlPath)
+			return nil, nil
 		}
-		s.dirListing(w, full, urlPath)
-		return nil, nil
+		http.Error(w, "directorio sin index.html (listing deshabilitado con -no-browse)", http.StatusNotFound)
+		return nil, err
 	}
 	if st.Size() > int64(s.cfg.CacheBytes) {
 		// archivo más grande que la cache: stream directo

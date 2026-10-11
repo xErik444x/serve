@@ -188,45 +188,34 @@ func TestServe_SubdirIndex(t *testing.T) {
 	}
 }
 
-func TestServe_Browse(t *testing.T) {
-	ts, _ := newTestServer(t, func(c *Config) { c.Browse = true })
-	resp, body := request(t, ts.URL+"/sub/")
-	if resp.StatusCode != 200 || !strings.Contains(body, "other.html") {
-		// sub tiene index.html, así que sirve ese; probamos el root sin browse de subfiles:
-		_ = body
-	}
-	// dir sin index: el tempdir ROOT tiene index, así que probá con un subdir sin index
-	nodir := filepath.Join(ts.URL, "")
-	_ = nodir
-}
-
-func TestServe_BrowseListing(t *testing.T) {
+func TestServe_BrowseDefault_ListaDirs(t *testing.T) {
+	// default: sin index.html => listing (como npx serve)
 	dir := testDir(t)
 	os.MkdirAll(filepath.Join(dir, "empty"), 0o755)
-	cfg := Config{Root: dir, CacheBytes: 1 << 20, Browse: true}
+	os.WriteFile(filepath.Join(dir, "empty", "nota.txt"), []byte("x"), 0o644)
+	cfg := Config{Root: dir, CacheBytes: 1 << 20} // NoBrowse false = default
 	s := New(cfg)
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
-
 	resp, body := request(t, ts.URL+"/empty/")
 	if resp.StatusCode != 200 {
-		t.Fatalf("browse: %d", resp.StatusCode)
+		t.Fatalf("browse default: esperaba 200, hay %d", resp.StatusCode)
 	}
-	if !strings.Contains(body, "empty") && !strings.Contains(body, "../") {
-		t.Errorf("listing sin contenido: %q", body)
+	if !strings.Contains(body, "nota.txt") {
+		t.Errorf("listing no muestra nota.txt: %q", body)
 	}
 }
 
-func TestServe_SinBrowse_404(t *testing.T) {
+func TestServe_NoBrowse_404(t *testing.T) {
 	dir := testDir(t)
 	os.MkdirAll(filepath.Join(dir, "empty"), 0o755)
-	cfg := Config{Root: dir, CacheBytes: 1 << 20, Browse: false}
+	cfg := Config{Root: dir, CacheBytes: 1 << 20, NoBrowse: true}
 	s := New(cfg)
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	resp, _ := request(t, ts.URL+"/empty/")
 	if resp.StatusCode != 404 {
-		t.Errorf("sin browse, dir sin index: esperaba 404, hay %d", resp.StatusCode)
+		t.Errorf("no-browse, dir sin index: esperaba 404, hay %d", resp.StatusCode)
 	}
 }
 

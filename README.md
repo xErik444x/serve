@@ -54,7 +54,9 @@ serve [flags]
 | `-o` | abrir el navegador al arrancar |
 | `-cors` | habilita CORS `*` (útil para frontends que consumen APIs) |
 | `-L` | escuchar en `0.0.0.0` (accesible desde la LAN) |
-| `-b` | listing de directorios sin `index.html` |
+| `-b` | ~~removido~~ (el listing es el default, como npx serve) |
+| `-no-browse` | deshabilita el listing de dirs (404 en dirs sin index) |
+| `-no-color` | sin colores ANSI (scripts / logs) |
 | `-no-cache` | deshabilitar la cache LRU (dev) |
 | `-cache 64` | tope de la cache en MB (default 64) |
 | `-q` | sin logs por request |
@@ -68,10 +70,32 @@ Al arrancar, el CLI queda vivo con un menú en la terminal:
 ```
 opciones:
   [o] abrir en el navegador
-  [s] ver stats (hit rate de la cache)
+  [s] ver stats (panel con hit rate)
   [l] listar archivos servidos
   [q] salir
 ```
+
+El panel de stats (`s`) muestra el hit rate de la cache con barra ascii y colores: verde ≥80%, amarillo 50-80%, rojo <50%:
+
+```
+  ╭──────────────────────────────╮
+  │   ⚡ serve-go — stats         │
+  ╰──────────────────────────────╯
+
+  cache hit rate  [███████████████████████░] 100.0%
+
+  requests        14000
+  hits            13997
+  misses          3
+  bytes enviados  107.2 MB
+  cache (len)     1 files
+  cache (mem)     7.8 KB
+  root            /tmp/site
+```
+
+### Listing de directorios
+
+Como `npx serve`: si un directorio no tiene `index.html`, se lista su contenido (HTML dark con links). Para desactivarlo: `-no-browse`.
 
 ### Endpoints internos
 
@@ -102,6 +126,15 @@ serve-go:   requests: 2000 | ok: 2000 |  115 ms | rps: 17280 | avg: 0.06 ms  (co
 serve-go:   requests: 2000 | ok: 2000 |   86 ms | rps: 23066 | avg: 0.04 ms  (warm)
 serve-go:   requests: 10000 | ok: 10000 | 458 ms | rps: 21833 (stress c=100, 0 fails)
 ```
+
+## Releases automáticos
+
+El workflow `.github/workflows/release.yml` compila y publica binarios solo:
+
+- **Tag `vX.Y.Z`** (ej: `git tag v1.1.0 && git push origin v1.1.0`) → corre tests, cross-compile de 5 binarios y crea el Release con notas automáticas: `serve-windows-amd64.exe`, `serve-linux-amd64/arm64`, `serve-darwin-amd64/arm64`.
+- **`workflow_dispatch`** (botón "Run workflow" en GitHub → Actions) → mismos binarios, subidos como artifact del run (sin crear release).
+
+Para versionar: `git tag v1.1.0 && git push origin v1.1.0`. El release aparece en https://github.com/xErik444x/serve-go/releases
 
 ## Cómo está hecho
 
