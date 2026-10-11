@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -68,33 +71,82 @@ func OpenBrowser(url string) error {
 	return cmd.Start()
 }
 
-// Estructura de menú interactivo (TUI simple sin deps).
+// MenuItem es una opción del menú interactivo (TUI simple sin deps).
 type MenuItem struct {
 	Key    string // tecla a apretar
 	Label  string
 	Action func() error
 }
 
-// Menu interactivo: lee una línea por stdin y ejecuta la acción.
+// Menu (compat): loop del menú sobre os.Stdin.
 func Menu(title string, items []MenuItem) error {
-	fmt.Println()
-	fmt.Println(title)
-	for _, it := range items {
-		fmt.Printf("  [%s] %s\n", it.Key, it.Label)
-	}
-	fmt.Println("  [q] salir")
-	fmt.Print("> ")
-	var choice string
-	fmt.Scanln(&choice)
-	choice = strings.TrimSpace(strings.ToLower(choice))
-	if choice == "q" || choice == "" {
-		return nil
-	}
-	for _, it := range items {
-		if strings.ToLower(it.Key) == choice {
-			return it.Action()
+	MenuLoop(os.Stdin, title, items)
+	return nil
+}
+
+// fmtPrint escribe a stdout (helper para tests).
+func fmtPrint(s string) {
+	fmt.Print(s)
+}
+
+// MenuLoop es el loop del menú interactivo. r es la fuente de input
+// (os.Stdin en runtime, strings.Reader en tests).
+//   - opción normal: ejecuta la acción y vuelve al prompt.
+//   - "s" (stats): entra en MODO STATS — el panel queda fijo en pantalla
+//     y NO vuelve al menú hasta que el usuario aprieta Enter (o q para salir).
+//   - "q" desde el menú (o desde stats) sale del loop.
+//   - EOF del input (pipe cerrada / no TTY) sale limpio.
+//
+// Devuelve true si salió por q (el usuario pidió salir).
+func MenuLoop(r io.Reader, title string, items []MenuItem) bool {
+	sc := bufio.NewScanner(r)
+	for {
+		fmt.Println()
+		fmt.Println(title)
+		for _, it := range items {
+			fmt.Printf("  [%s] %s\n", it.Key, it.Label)
+		}
+		fmt.Println("  [q] salir")
+		fmt.Print("> ")
+		if !sc.Scan() {
+			return false
+		}
+		choice := strings.TrimSpace(strings.ToLower(sc.Text()))
+		switch choice {
+		case "q":
+			return true
+		case "":
+			continue // Enter solo: re-dibuja el menú
+		case "s":
+			for _, it := range items {
+				if strings.ToLower(it.Key) == "s" {
+					if err := it.Action(); err != nil {
+						fmt.Println("error:", err)
+					}
+					// MODO STATS: queda fijo hasta Enter/q
+					fmt.Print("\n[Enter] volver al menú · [q] salir > ")
+					if !sc.Scan() {
+						return false
+					}
+					if strings.TrimSpace(strings.ToLower(sc.Text())) == "q" {
+						return true
+					}
+				}
+			}
+		default:
+			matched := false
+			for _, it := range items {
+				if strings.ToLower(it.Key) == choice {
+					if err := it.Action(); err != nil {
+						fmt.Println("error:", err)
+					}
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				fmt.Println("opción inválida:", choice)
+			}
 		}
 	}
-	fmt.Println("opción inválida:", choice)
-	return nil
 }
