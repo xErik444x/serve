@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const version = "1.1.0"
+const version = "1.3.0"
 
 func main() {
 	var (
@@ -104,19 +104,18 @@ func main() {
 
 	// menú interactivo (bloquea stdin hasta q)
 	startTime := time.Now()
+	statsView := func() StatsView {
+		h, m, b, t := srv.Stats().Snapshot()
+		return StatsView{
+			Hits: h, Misses: m, Bytes: b, Total: t,
+			CacheLen:   srv.cache.Len(),
+			CacheBytes: srv.cache.Bytes(),
+			Root:       dir,
+			Uptime:     time.Since(startTime),
+		}
+	}
 	items := []MenuItem{
 		{"o", "abrir en el navegador", func() error { return OpenBrowser(url) }},
-		{"s", "ver stats (panel con hit rate)", func() error {
-			h, m, b, t := srv.Stats().Snapshot()
-			fmt.Print(RenderStats(StatsView{
-				Hits: h, Misses: m, Bytes: b, Total: t,
-				CacheLen:   srv.cache.Len(),
-				CacheBytes: srv.cache.Bytes(),
-				Root:       dir,
-				Uptime:     time.Since(startTime),
-			}))
-			return nil
-		}},
 		{"l", "listar archivos servidos", func() error {
 			filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 				if err == nil && !info.IsDir() {
@@ -128,12 +127,26 @@ func main() {
 			return nil
 		}},
 	}
+
+	// Dashboard de stats en vivo desde el arranque; el menú es opcional
+	// (Enter lo abre) y Enter en el menú vuelve al dashboard.
+	pump := newPump(os.Stdin)
 	for {
 		if err := nonBlockingCheck(errCh); err != nil {
 			fatal("server: %v", err)
 		}
-		if err := Menu("opciones:", items); err != nil {
-			break
+		action := LiveDashboard(pump, func() string {
+			return RenderStats(statsView())
+		}, time.Second)
+		switch action {
+		case "quit", "eof":
+			fmt.Println("\nserve-go: chau 👋")
+			return
+		case "menu":
+			if MenuLoop(pump, "opciones:", items) {
+				fmt.Println("\nserve-go: chau 👋")
+				return
+			}
 		}
 	}
 }
@@ -156,7 +169,8 @@ Ejemplos:
   serve                  sirve el dir actual en :3000 (o el próximo libre)
   serve -p 8080 -o       puerto 8080 y abre el navegador
   serve -d ./dist        sirve ./dist
-  serve -cors -b         CORS + listing de directorios
+  serve -cors            CORS para APIs front
+  serve -no-browse       sin listing de dirs (404 en carpetas sin index)
   serve -L               accesible desde la LAN (0.0.0.0)
   serve -no-cache -q     sin cache ni logs (CI)`)
 }

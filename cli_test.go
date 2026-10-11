@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func captureStdout(t *testing.T) (func() string, func()) {
@@ -23,92 +24,137 @@ func captureStdout(t *testing.T) (func() string, func()) {
 	return read, restore
 }
 
-// finishOutput corta la captura: restaura stdout (cierra el pipe de escritura)
-// y devuelve lo capturado. Sin esto, io.ReadAll bloquea esperando EOF del pipe.
 func finishOutput(read func() string, restore func()) string {
 	restore()
 	return read()
 }
 
-// MenuLoop(r, ...): stats queda fijo hasta Enter/q; q desde stats sale del loop.
-func TestMenuLoop_StatsFijoHastaEnter(t *testing.T) {
-	input := "s\n\nq\n"
-	read, restore := captureStdout(t)
-
-	items := []MenuItem{
-		{"s", "ver stats", func() error { fmtPrint("PANEL_DE_STATS\n"); return nil }},
-	}
-	MenuLoop(strings.NewReader(input), "opciones:", items)
-
-	out := finishOutput(read, restore)
-	if !strings.Contains(out, "PANEL_DE_STATS") {
-		t.Errorf("stats no se mostró: %q", out)
-	}
-	if !strings.Contains(out, "volver al menú") {
-		t.Errorf("sin hint de volver: %q", out)
-	}
-	// tras el Enter vuelve a mostrar el menú (el loop siguió vivo)
-	if !strings.Contains(out, "opciones:") || !strings.Contains(out, "[s] ver stats") {
-		t.Errorf("no volvió al menú tras Enter: %q", out)
+// drain consume el canal del pump (barrido de las goroutine-leaks en tests).
+func drain(ch chan string) {
+	for range ch {
 	}
 }
 
-// q desde el modo stats sale directo del loop (no vuelve al menú).
-func TestMenuLoop_QDesdeStatsSale(t *testing.T) {
-	input := "s\nq\n"
+// LiveDashboard: dibuja el panel al arrancar y devuelve "eof" sin colgar.
+func TestLiveDashboard_MuestraPanelAlArrancar(t *testing.T) {
 	read, restore := captureStdout(t)
-
-	MenuLoop(strings.NewReader(input), "opciones:", []MenuItem{
-		{"s", "ver stats", func() error { fmtPrint("PANEL\n"); return nil }},
-	})
-
+	ch := newPump(strings.NewReader(""))
+	got := LiveDashboard(ch, func() string { return "ENCABEZADO\nlinea\n" }, time.Hour)
 	out := finishOutput(read, restore)
-	if !strings.Contains(out, "PANEL") {
-		t.Errorf("stats no se mostró: %q", out)
+
+	if got != "eof" {
+		t.Errorf("con input vacío esperaba eof, got %q", got)
 	}
-	// el menú se muestra UNA sola vez (no volvió tras el q de stats)
-	if n := strings.Count(out, "[s] ver stats"); n != 1 {
-		t.Errorf("q desde stats debería salir del loop: menú mostrado %d veces", n)
+	if !strings.Contains(out, "ENCABEZADO") {
+		t.Errorf("no dibujó el panel al arrancar: %q", out)
 	}
 }
+
+func TestLiveDashboard_QApuntaSalir(t *testing.T) {
+	read, restore := captureStdout(t)
+	ch := newPump(strings.NewReader("q\n"))
+	got := LiveDashboard(ch, func() string { return "X\n" }, time.Hour)
+	finishOutput(read, restore)
+	if got != "quit" {
+		t.Errorf("q debería dar quit, got %q", got)
+	}
+}
+
+func TestLiveDashboard_EnterAbreMenu(t *testing.T) {
+	read, restore := captureStdout(t)
+	ch := newPump(strings.NewReader("\n"))
+	got := LiveDashboard(ch, func() string { return "X\n" }, time.Hour)
+	finishOutput(read, restore)
+	if got != "menu" {
+		t.Errorf("Enter debería abrir el menú, got %q", got)
+	}
+}
+
+// El panel se refresca solo (varias llamadas a render) mientras corre.
+func TestLiveDashboard_RefrescaEnElTiempo(t *testing.T) {
+	read, restore := captureStdout(t)
+	pr, pw := io.Pipe()
+	ch := newPump(pr)
+	// inyectar "q" tras 40ms: durante ese lapso deben dispararse ticks (5ms)
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		pw.Write([]byte("q\n"))
+	}()
+	var calls int
+	got := LiveDashboard(ch, func() string { calls++; return "P\n" }, 5*time.Millisecond)
+	finishOutput(read, restore)
+	if got != "quit" {
+		t.Errorf("esperaba quit, got %q", got)
+	}
+	if calls < 2 {
+		t.Errorf("el panel no se refrescó (render llamado %d veces)", calls)
+	}
+}
+
+// ---- MenuLoop (opcional) ----
 
 func TestMenuLoop_QSale(t *testing.T) {
-	input := "q\n"
 	read, restore := captureStdout(t)
-
-	MenuLoop(strings.NewReader(input), "opciones:", []MenuItem{
-		{"s", "stats", func() error { return nil }},
-	})
-
+	ch := newPump(strings.NewReader("q\n"))
+	quit := MenuLoop(ch, "opciones:", []MenuItem{{"o", "abrir", func() error { return nil }}})
 	out := finishOutput(read, restore)
+	if !quit {
+		t.Error("q debería salir (quit=true)")
+	}
 	if !strings.Contains(out, "opciones:") {
 		t.Errorf("sin menú: %q", out)
 	}
-	if strings.Count(out, "opciones:") != 1 {
-		t.Errorf("q debería salir sin re-dibujar: %q", out)
+}
+
+// Enter vuelve al dashboard sin salir del programa.
+func TestMenuLoop_EnterVuelveSinSalir(t *testing.T) {
+	read, restore := captureStdout(t)
+	ch := newPump(strings.NewReader("\n"))
+	quit := MenuLoop(ch, "opciones:", []MenuItem{{"o", "abrir", func() error { return nil }}})
+	finishOutput(read, restore)
+	if quit {
+		t.Error("Enter NO debería salir (quit=false), debe volver al dashboard")
 	}
 }
 
-func TestMenuLoop_OpcionInvalida(t *testing.T) {
-	input := "z\nq\n"
+func TestMenuLoop_EjecutaAccionYVuelve(t *testing.T) {
 	read, restore := captureStdout(t)
-
-	MenuLoop(strings.NewReader(input), "opciones:", []MenuItem{
-		{"s", "stats", func() error { return nil }},
-	})
-
+	ch := newPump(strings.NewReader("o\n\n"))
+	ran := false
+	// o → ejecuta acción; segundo Enter → vuelve (quit=false)
+	quit := MenuLoop(ch, "opciones:", []MenuItem{{"o", "abrir", func() error { ran = true; fmtPrint("ABRI\n"); return nil }}})
 	out := finishOutput(read, restore)
+	if !ran {
+		t.Error("la acción no se ejecutó")
+	}
+	if quit {
+		t.Error("tras la acción + Enter debería volver (quit=false)")
+	}
+	_ = out
+}
+
+func TestMenuLoop_OpcionInvalida(t *testing.T) {
+	read, restore := captureStdout(t)
+	ch := newPump(strings.NewReader("z\nq\n"))
+	quit := MenuLoop(ch, "opciones:", []MenuItem{{"o", "abrir", func() error { return nil }}})
+	out := finishOutput(read, restore)
+	if !quit {
+		t.Error("tras opción inválida + q debería salir")
+	}
 	if !strings.Contains(out, "inválida") {
 		t.Errorf("sin aviso de opción inválida: %q", out)
 	}
 }
 
-// stdin EOF (pipe cerrada / no TTY) sale limpio sin colgar.
+// stdin EOF (no TTY) sale limpio sin colgar.
 func TestMenuLoop_EOF(t *testing.T) {
 	read, restore := captureStdout(t)
-
-	MenuLoop(strings.NewReader(""), "opciones:", nil)
+	ch := newPump(strings.NewReader(""))
+	quit := MenuLoop(ch, "opciones:", nil)
 	out := finishOutput(read, restore)
+	if !quit {
+		t.Error("EOF debería salir (quit=true)")
+	}
 	if !strings.Contains(out, "opciones:") {
 		t.Errorf("EOF debería mostrar el menú una vez: %q", out)
 	}

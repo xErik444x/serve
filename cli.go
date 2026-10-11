@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -78,61 +77,98 @@ type MenuItem struct {
 	Action func() error
 }
 
-// Menu (compat): loop del menú sobre os.Stdin.
-func Menu(title string, items []MenuItem) error {
-	MenuLoop(os.Stdin, title, items)
-	return nil
-}
-
 // fmtPrint escribe a stdout (helper para tests).
 func fmtPrint(s string) {
 	fmt.Print(s)
 }
 
-// MenuLoop es el loop del menú interactivo. r es la fuente de input
-// (os.Stdin en runtime, strings.Reader en tests).
-//   - opción normal: ejecuta la acción y vuelve al prompt.
-//   - "s" (stats): entra en MODO STATS — el panel queda fijo en pantalla
-//     y NO vuelve al menú hasta que el usuario aprieta Enter (o q para salir).
-//   - "q" desde el menú (o desde stats) sale del loop.
-//   - EOF del input (pipe cerrada / no TTY) sale limpio.
+// newPump lee líneas de r en una goroutine y las publica en un canal, cerrando
+// el canal al llegar EOF. Deja consumir el input tanto en modo no-bloqueante
+// (dashboard en vivo, vía select) como bloqueante (menú) sobre la MISMA fuente,
+// sin que un bufio.Scanner de un lado se "coma" lo que el otro esperaba.
+func newPump(r io.Reader) chan string {
+	ch := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(r)
+		for sc.Scan() {
+			ch <- sc.Text()
+		}
+		close(ch)
+	}()
+	return ch
+}
+
+// norm normaliza una línea de input (sin espacios, minúsculas).
+func norm(s string) string { return strings.TrimSpace(strings.ToLower(s)) }
+
+// LiveDashboard dibuja el panel en vivo (se refresca cada interval) y en
+// paralelo escucha el input sin bloquearse. Devuelve:
+//   - "quit": el usuario apretó q
+//   - "menu": apretó Enter (o 'm') → abrir el menú opcional
+//   - "eof" : se cerró la entrada (pipe cerrada / Ctrl-D)
+func LiveDashboard(ch chan string, render func() string, interval time.Duration) string {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	drawn, prevH := false, 0
+	draw := func() {
+		s := render()
+		if !drawn {
+			fmt.Print("\033[2J\033[H") // limpiar pantalla en el primer dibujo
+		} else if prevH > 0 {
+			fmt.Printf("\033[%dA", prevH) // subir al tope del panel
+			fmt.Print("\033[J")           // borrar de ahí hacia abajo
+		}
+		fmt.Print(s)
+		prevH = strings.Count(s, "\n")
+		drawn = true
+	}
+	draw()
+	for {
+		select {
+		case <-ticker.C:
+			draw()
+		case raw, ok := <-ch:
+			if !ok {
+				return "eof"
+			}
+			switch norm(raw) {
+			case "q":
+				return "quit"
+			case "", "m", "menu":
+				return "menu"
+			}
+		}
+	}
+}
+
+// MenuLoop es el menú interactivo (opcional: se abre desde el dashboard con
+// Enter). Lee del MISMO canal que el dashboard.
+//   - opción válida: ejecuta la acción y vuelve a mostrar el menú.
+//   - Enter: vuelve al dashboard en vivo.
+//   - q: sale del programa.
+//   - EOF: sale del programa.
 //
-// Devuelve true si salió por q (el usuario pidió salir).
-func MenuLoop(r io.Reader, title string, items []MenuItem) bool {
-	sc := bufio.NewScanner(r)
+// Devuelve true si el usuario pidió salir (q o EOF).
+func MenuLoop(ch chan string, title string, items []MenuItem) bool {
 	for {
 		fmt.Println()
 		fmt.Println(title)
 		for _, it := range items {
 			fmt.Printf("  [%s] %s\n", it.Key, it.Label)
 		}
-		fmt.Println("  [q] salir")
+		fmt.Println("  [Enter] volver a stats  ·  [q] salir")
 		fmt.Print("> ")
-		if !sc.Scan() {
-			return false
+		raw, ok := <-ch
+		if !ok {
+			return true
 		}
-		choice := strings.TrimSpace(strings.ToLower(sc.Text()))
+		choice := norm(raw)
 		switch choice {
 		case "q":
 			return true
 		case "":
-			continue // Enter solo: re-dibuja el menú
-		case "s":
-			for _, it := range items {
-				if strings.ToLower(it.Key) == "s" {
-					if err := it.Action(); err != nil {
-						fmt.Println("error:", err)
-					}
-					// MODO STATS: queda fijo hasta Enter/q
-					fmt.Print("\n[Enter] volver al menú · [q] salir > ")
-					if !sc.Scan() {
-						return false
-					}
-					if strings.TrimSpace(strings.ToLower(sc.Text())) == "q" {
-						return true
-					}
-				}
-			}
+			return false // Enter → volver al dashboard
 		default:
 			matched := false
 			for _, it := range items {

@@ -101,43 +101,39 @@ serve [flags]
 
 ### Menú interactivo
 
-Al arrancar, el CLI queda vivo con un menú:
+Al arrancar, el CLI muestra el **panel de stats en vivo** (se refresca solo, sin
+que tengas que apretar nada). El menú es **opcional**:
 
 ```
-  serve-go 1.1.0
+  serve-go 1.3.0
   ────────────────────────────────────
   sirviendo   /home/erik/misitio
   archivos    60 (880.0 KB)
   url         http://localhost:3000
-  cache       64 MB (LRU)
+  cache       64 MB (LRU) | stats: http://localhost:3000/__serve/stats
   ────────────────────────────────────
+  CTRL+C para parar
 
-opciones:
-  [o] abrir en el navegador
-  [s] ver stats (panel con hit rate)
-  [l] listar archivos servidos
-  [q] salir
-```
-
-### Panel de stats ([s])
-
-Hit rate de la cache con barra ascii y colores: verde ≥80%, amarillo 50-80%, rojo <50%.
-
-```
   ╭──────────────────────────────╮
   │   ⚡ serve-go — stats         │
   ╰──────────────────────────────╯
 
-  cache hit rate  [███████████████████████░] 99.9%
+  cache hit rate  [██████████████░░░░░░░░░░] 62.5%
 
   requests        14000
-  hits            13997
-  misses          3
-  bytes enviados  107.2 MB
-  cache (len)     1 files
-  cache (mem)     7.8 KB
-  root            /home/erik/misitio
+  ...
+  [Enter] menú · [q] salir
 ```
+
+- **[Enter]** abre el menú de acciones: `[o]` abrir navegador, `[l]` listar archivos.
+- **Enter** de nuevo vuelve al panel en vivo; **q** sale del programa (cierra el server).
+- Ponelo en background/CI con `-no-menu`.
+
+### Panel de stats
+
+El panel se refresca cada segundo con los contadores reales (requests, hits,
+misses, bytes, cache). Hit rate con barra ascii y colores: verde ≥80%,
+amarillo 50-80%, rojo <50%.
 
 ### Listing de directorios
 
@@ -194,7 +190,7 @@ go test ./...        # 29 tests
 go vet ./...
 ```
 
-Cubren: serving + MIME types (+ mayúsculas), ETag/304, LRU evict y orden, path traversal, CORS, HEAD, 404/405, health/stats, listing de dirs (default y `-no-browse`), stream de archivos mayores a la cache, concurrencia (200 requests paralelos + stats sin pérdidas), panel de stats (formato, colores por hit rate, `-no-color`).
+Cubren: serving + MIME types (+ mayúsculas), ETag/304, LRU evict y orden, path traversal, CORS, HEAD, 404/405, health/stats, listing de dirs (default y `-no-browse`), stream de archivos mayores a la cache, concurrencia (200 requests paralelos + stats sin pérdidas), panel de stats (formato, colores por hit rate, `-no-color`), dashboard en vivo (arranca solo, refresca, `q` sale) y menú opcional (Enter vuelve al dashboard).
 
 ## Licencia
 

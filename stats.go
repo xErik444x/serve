@@ -76,6 +76,8 @@ func RenderStats(v StatsView) string {
 	row("cache (mem)", humanBytes(v.CacheBytes), cCyan)
 	row("root", v.Root, cGray)
 	b.WriteString("\n")
+	b.WriteString(paint(cDim, "  [Enter] menú · [q] salir") + "\n")
+	b.WriteString("\n")
 	return b.String()
 }
 
